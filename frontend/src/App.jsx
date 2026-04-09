@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { useInterview } from './hooks/useInterview';
 import { Loader } from './components/Loader';
@@ -9,55 +9,107 @@ const ROLES = ["Python", "Web Development", "AI", "Java"];
 
 export default function App() {
   const [view, setView] = useState('land'); 
-  const { role, question, loading, result, qCount, setQCount, fetchQuestion, evaluateAnswer, setResult } = useInterview();
+  const { 
+    role, 
+    question, 
+    loading, 
+    result, 
+    qCount, 
+    setQCount, 
+    fetchQuestion, 
+    evaluateAnswer, 
+    setResult 
+  } = useInterview();
 
-  const handleStart = async (r) => {
-    await fetchQuestion(r);
-    setView('room');
+  // START INTERVIEW
+  const handleStart = async (selectedRole) => {
+    try {
+      await fetchQuestion(selectedRole);
+      // Wait for data to exist before switching view
+      if (!loading) {
+        setView('room');
+      }
+    } catch (err) {
+      console.error("Start Error:", err);
+      alert("Check your backend connection!");
+    }
+  };
+
+  // SUBMIT ANSWER
+  const handleSubmitAnswer = async (answerText) => {
+    try {
+      await evaluateAnswer(answerText);
+      setView('result');
+    } catch (err) {
+      console.error("Evaluation Error:", err);
+    }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-6">
+    <div className="min-h-screen bg-[#0a0a0a] text-[#f5f5f5] flex items-center justify-center p-6 font-sans selection:bg-accent selection:text-charcoal">
       <AnimatePresence mode="wait">
-        {loading ? <Loader key="loader" /> : (
+        
+        {/* LOADER STATE */}
+        {loading ? (
+          <Loader key="loader" />
+        ) : (
+          
+          /* LANDING VIEW */
           view === 'land' ? (
-            <div key="land" className="text-center">
-              <h1 className="text-6xl font-black mb-10 tracking-tighter">AI MOCK INTERVIEW</h1>
-              <div className="grid grid-cols-2 gap-4">
+            <div key="land" className="text-center max-w-2xl">
+              <h1 className="text-6xl md:text-8xl font-black mb-6 tracking-tighter italic border-b-4 border-white pb-4">
+                AI MOCK <span className="text-gray-500 not-italic">SYS</span>
+              </h1>
+              <p className="mb-10 text-gray-400 tracking-widest uppercase text-xs">Select your discipline to begin</p>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {ROLES.map(r => (
                   <button 
                     key={r} 
                     onClick={() => handleStart(r)} 
-                    className="p-6 border border-white/10 rounded-2xl hover:border-accent transition-all uppercase text-sm font-bold"
+                    className="p-8 border border-white/10 rounded-3xl hover:border-white transition-all bg-white/5 text-xl font-bold uppercase tracking-tight hover:bg-white hover:text-black"
                   >
                     {r}
                   </button>
                 ))}
               </div>
             </div>
-          ) : view === 'room' ? (
+          ) : 
+
+          /* INTERVIEW ROOM VIEW */
+          view === 'room' && question ? (
             <InterviewRoom 
               key="room" 
               question={question} 
               qCount={qCount} 
-              onSubmit={async (a) => {
-                await evaluateAnswer(a);   // ✅ FIX
-                setView('result');         // ✅ move AFTER await
+              role={role}
+              onSubmit={handleSubmitAnswer} 
+            />
+          ) : 
+
+          /* RESULT VIEW */
+          view === 'result' && result ? (
+            <ResultView 
+              key="result" 
+              result={result} 
+              onRestart={() => { 
+                setView('land'); 
+                setQCount(1); 
+                setResult(null); 
+              }} 
+              onNext={async () => { 
+                setResult(null); // Clear old result first
+                setQCount(c => c + 1); 
+                await fetchQuestion(role); 
+                setView('room'); 
               }} 
             />
           ) : (
-            result ? (   // ✅ SAFETY CHECK
-              <ResultView 
-                key="result" 
-                result={result} 
-                onRestart={() => { setView('land'); setQCount(1); setResult(null); }} 
-                onNext={async () => { 
-                  setQCount(c => c + 1); 
-                  await fetchQuestion(role); 
-                  setView('room'); 
-                }} 
-              />
-            ) : <Loader />   // ✅ fallback
+            /* FALLBACK - In case data is missing, go home */
+            <div className="text-center">
+               <p className="text-gray-500 mb-4">Awaiting data stream...</p>
+               <button onClick={() => setView('land')} className="underline">Return Home</button>
+            </div>
           )
         )}
       </AnimatePresence>
